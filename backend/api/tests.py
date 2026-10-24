@@ -1,8 +1,10 @@
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from django.test import Client, SimpleTestCase
 
@@ -70,6 +72,93 @@ class ApiEndpointTests(SimpleTestCase):
             "ai_configured": False,
             "model": os.getenv("OPENAI_MODEL") or None,
         })
+
+    def _analysis_request(self, payload=None):
+        return self.client.post(
+            "/api/analyze/",
+            data=json.dumps(payload if payload is not None else {
+                "language": "python",
+                "code": "print(10 / 0)",
+                "error_message": "ZeroDivisionError: division by zero",
+            }),
+            content_type="application/json",
+        )
+
+    def _mock_openai(self, content):
+        client = Mock()
+        client.chat.completions.create.return_value.choices = [
+            SimpleNamespace(message=SimpleNamespace(content=content))
+        ]
+        sdk = SimpleNamespace(OpenAI=Mock(return_value=client))
+        self.openai_client = client
+        self.openai_constructor = sdk.OpenAI
+        self.openai_modules = patch.dict(sys.modules, {"openai": sdk})
+        self.openai_modules.start()
+        self.addCleanup(self.openai_modules.stop)
+
+    def test_analyze_returns_structured_result_without_running_tests(self):
+        content = json.dumps({
+            "root_cause": "The denominator is zero.",
+            "explanation": "An empty list has no values to average.",
+            "fixed_code": "if not numbers: return 0",
+            "changes": ["Handle empty input before dividing."],
+            "suggested_tests": [{"name": "Empty input", "description": "Check an empty list."}],
+        })
+        self._mock_openai(content)
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-secret", "OPENAI_MODEL": "test-model"}):
+            response = self._analysis_request()
+        self.assertEqual(response.status_code, 200, response.content)
+        result = response.json()
+        self.assertTrue(result["success"])
+        self.assertEqual(result["verification"]["status"], "not_run")
+        self.assertEqual(result["root_cause"], "The denominator is zero.")
+        self.assertNotIn("test-secret", response.content.decode())
+        self.openai_constructor.assert_called_once_with(api_key="test-secret", timeout=30.0)
+        self.assertEqual(self.openai_client.chat.completions.create.call_args.kwargs["model"], "test-model")
+
+    def test_analyze_rejects_missing_or_empty_inputs(self):
+        cases = [
+            {"language": "python", "code": "", "error_message": "error"},
+            {"language": "python", "code": "print(1)", "error_message": " "},
+            {"language": "python", "error_message": "error"},
+        ]
+        for payload in cases:
+            with self.subTest(payload=payload):
+                response = self._analysis_request(payload)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+
+    def test_analyze_rejects_unsupported_language_and_oversized_code(self):
+        unsupported = self._analysis_request({"language": "javascript", "code": "x", "error_message": "error"})
+        self.assertEqual(unsupported.status_code, 400)
+        oversized = self._analysis_request({"language": "python", "code": "x" * (100 * 1024 + 1), "error_message": "error"})
+        self.assertEqual(oversized.status_code, 413)
+
+    def test_analyze_missing_key_returns_configuration_error(self):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "", "OPENAI_MODEL": "test-model"}):
+            response = self._analysis_request()
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("OPENAI_API_KEY", response.json()["error"])
+
+    def test_analyze_rejects_malformed_ai_json_safely(self):
+        self._mock_openai("not JSON")
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-secret", "OPENAI_MODEL": "test-model"}):
+            response = self._analysis_request()
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()["error"], "AI returned malformed analysis JSON.")
+
+    def test_analyze_provider_error_is_safe(self):
+        client = Mock()
+        client.chat.completions.create.side_effect = ValueError("provider secret diagnostic")
+        sdk = SimpleNamespace(OpenAI=Mock(return_value=client))
+        module_patch = patch.dict(sys.modules, {"openai": sdk})
+        module_patch.start()
+        self.addCleanup(module_patch.stop)
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-secret", "OPENAI_MODEL": "test-model"}):
+            response = self._analysis_request()
+        self.assertEqual(response.status_code, 502)
+        self.assertNotIn("provider secret", response.content.decode())
+        self.assertNotIn("test-secret", response.content.decode())
 
     def test_cors_preflight_allows_local_frontend_only(self):
         response = self.client.options(

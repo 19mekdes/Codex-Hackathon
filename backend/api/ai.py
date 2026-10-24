@@ -85,6 +85,75 @@ def diagnose(code, error, fixture_id=None):
         raise ValueError(error_message) from None
 
 
+def analyze_code(code, error_message):
+    """Return a structured diagnosis without executing submitted code."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY is required for code analysis.")
+
+    model = os.getenv("OPENAI_MODEL")
+    if not model:
+        raise ValueError("OPENAI_MODEL is not configured.")
+
+    try:
+        from openai import OpenAI
+
+        client = OpenAI(api_key=api_key, timeout=30.0)
+        response = client.chat.completions.create(
+            model=model,
+            response_format={"type": "json_object"},
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Analyze Python code and its error. Return JSON only with exactly these fields: "
+                        "root_cause (string), explanation (string), fixed_code (string), "
+                        "changes (array of strings), suggested_tests (array of objects with string "
+                        "name and description). Do not claim tests were run."
+                    ),
+                },
+                {"role": "user", "content": f"Code:\n{code}\n\nError:\n{error_message}"},
+            ],
+        )
+        raw_content = response.choices[0].message.content
+    except Exception:
+        # Do not expose provider error text, prompts, request metadata, or credentials.
+        raise RuntimeError("AI analysis failed (network, timeout, or invalid response).") from None
+
+    try:
+        result = json.loads(raw_content)
+    except (TypeError, json.JSONDecodeError):
+        raise ValueError("AI returned malformed analysis JSON.") from None
+    required_strings = ("root_cause", "explanation", "fixed_code")
+    if not isinstance(result, dict) or any(
+        not isinstance(result.get(field), str) or not result[field].strip()
+        for field in required_strings
+    ):
+        raise ValueError("AI returned invalid analysis fields.")
+    changes = result.get("changes")
+    suggested_tests = result.get("suggested_tests")
+    if not isinstance(changes, list) or any(not isinstance(item, str) for item in changes):
+        raise ValueError("AI returned invalid analysis changes.")
+    if not isinstance(suggested_tests, list) or any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("name"), str)
+        or not isinstance(item.get("description"), str)
+        for item in suggested_tests
+    ):
+        raise ValueError("AI returned invalid suggested tests.")
+    fixed_code = result["fixed_code"].strip()
+    if fixed_code.startswith("```") and fixed_code.endswith("```"):
+        fixed_lines = fixed_code.splitlines()
+        fixed_code = "\n".join(fixed_lines[1:-1]).strip()
+    return {
+        "root_cause": result["root_cause"].strip(),
+        "explanation": result["explanation"].strip(),
+        "fixed_code": fixed_code,
+        "changes": changes,
+        "suggested_tests": suggested_tests,
+    }
+
+
 def _simulated_project_diagnosis(code, error):
     try:
         files = json.loads(code)
