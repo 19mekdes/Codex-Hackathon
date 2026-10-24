@@ -11,7 +11,7 @@ from pathlib import PurePosixPath
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from .ai import diagnose, diagnose_project
+from .ai import analyze_code, diagnose, diagnose_project
 from .verify import (
     FIXTURE_IDS,
     _copy_project,
@@ -39,6 +39,7 @@ PROJECT_RUNS = {}
 LATEST_PROJECT_RUNS = {}
 PROJECT_MAX_CONTEXT_FILES = 3
 PROJECT_MAX_CONTEXT_BYTES = 200 * 1024
+ANALYSIS_MAX_FIELD_BYTES = 100 * 1024
 
 
 def _public_fixture_test_result(result):
@@ -110,6 +111,54 @@ def diagnose_view(request):
         return JsonResponse({"error": str(exc)}, status=400)
     except Exception:
         return JsonResponse({"error": "Diagnosis service request failed."}, status=502)
+
+
+@csrf_exempt
+def analyze_view(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Method not allowed."}, status=405)
+    payload, error_response = _json_request(request)
+    if error_response:
+        return error_response
+
+    language = payload.get("language")
+    code = payload.get("code")
+    error_message = payload.get("error_message")
+    if language != "python":
+        return JsonResponse({"error": "Only Python is supported right now."}, status=400)
+    if not isinstance(code, str) or not code.strip():
+        return JsonResponse({"error": "code is required and must not be empty."}, status=400)
+    if not isinstance(error_message, str) or not error_message.strip():
+        return JsonResponse({"error": "error_message is required and must not be empty."}, status=400)
+    if len(code.encode("utf-8")) > ANALYSIS_MAX_FIELD_BYTES:
+        return JsonResponse({"error": "code must be 100 KB or smaller."}, status=413)
+    if len(error_message.encode("utf-8")) > ANALYSIS_MAX_FIELD_BYTES:
+        return JsonResponse({"error": "error_message must be 100 KB or smaller."}, status=413)
+    if not os.getenv("OPENAI_API_KEY"):
+        return JsonResponse({"error": "OPENAI_API_KEY is required for code analysis."}, status=503)
+    if not os.getenv("OPENAI_MODEL"):
+        return JsonResponse({"error": "OPENAI_MODEL is not configured."}, status=503)
+
+    try:
+        diagnosis = analyze_code(code, error_message)
+    except (ValueError, RuntimeError) as exc:
+        return JsonResponse({"error": str(exc)}, status=502)
+    except Exception:
+        return JsonResponse({"error": "AI analysis failed."}, status=502)
+
+    return JsonResponse({
+        "success": True,
+        "language": language,
+        "root_cause": diagnosis["root_cause"],
+        "explanation": diagnosis["explanation"],
+        "fixed_code": diagnosis["fixed_code"],
+        "changes": diagnosis["changes"],
+        "suggested_tests": diagnosis["suggested_tests"],
+        "verification": {
+            "status": "not_run",
+            "message": "The proposed fix has not been executed against tests.",
+        },
+    })
 
 
 @csrf_exempt
