@@ -9,4 +9,5 @@ urlpatterns = [
     path("api/diagnose/", views.diagnose_view, name="diagnose"),
     path("api/fix/", views.fix_view, name="fix"),
     path("api/recorded/", views.recorded_view, name="recorded"),
+    path("api/health/", views.health_view, name="health"),
 ]

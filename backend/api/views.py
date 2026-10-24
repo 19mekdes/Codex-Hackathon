@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 from django.http import JsonResponse
@@ -171,3 +172,13 @@ def recorded_view(request):
         return JsonResponse({"error": "Recorded demo data is invalid."}, status=500)
     data["recorded"] = True
     return JsonResponse(data)
+
+
+def health_view(request):
+    if request.method != "GET":
+        return JsonResponse({"error": "Method not allowed."}, status=405)
+    return JsonResponse({
+        "ok": True,
+        "ai_configured": bool(os.getenv("OPENAI_API_KEY")),
+        "model": os.getenv("OPENAI_MODEL") or None,
+    })

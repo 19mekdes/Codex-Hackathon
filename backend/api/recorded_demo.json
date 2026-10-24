@@ -1,0 +1,27 @@
+{
+  "diagnosis": {
+    "cause": "The fixture contains a known bug that causes its test to fail.",
+    "explanation": "This simulated diagnosis uses the fix included with the fixture.",
+    "fixed_code": "def item_count(items):\n    \"\"\"Return the number of items, treating None as an empty collection.\"\"\"\n    if items is None:\n        return 0\n    return len(items)\n",
+    "simulated": true
+  },
+  "before": {
+    "status": "failed",
+    "output": ".E\n======================================================================\nERROR: test_none_is_empty (test_buggy.ItemCountTests.test_none_is_empty)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"C:\\Users\\HP\\AppData\\Local\\Temp\\fixture-logfgpn1\\none_check\\test_buggy.py\", line 8, in test_none_is_empty\n    self.assertEqual(item_count(None), 0)\n                     ^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\HP\\AppData\\Local\\Temp\\fixture-logfgpn1\\none_check\\buggy.py\", line 3, in item_count\n    return len(items)\n           ^^^^^^^^^^\nTypeError: object of type 'NoneType' has no len()\n\n----------------------------------------------------------------------\nRan 2 tests in 0.002s\n\nFAILED (errors=1)"
+  },
+  "after": {
+    "status": "passed",
+    "output": "..\n----------------------------------------------------------------------\nRan 2 tests in 0.001s\n\nOK"
+  },
+  "report": [
+    {
+      "name": "buggy_fixture_fails",
+      "status": "passed"
+    },
+    {
+      "name": "fixed_code_passes",
+      "status": "passed"
+    }
+  ],
+  "simulated": true
+}
