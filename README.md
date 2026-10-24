@@ -114,7 +114,20 @@ npm run build
 
 ## Deployment notes
 
-This repository is configured for local development. Before deploying, configure Django `ALLOWED_HOSTS` and CORS for the actual frontend origin, set `DJANGO_DEBUG=false` and a strong `DJANGO_SECRET_KEY`, provide `OPENAI_API_KEY` and `OPENAI_MODEL` only on the backend, and set the frontend’s `VITE_API_BASE_URL` to the deployed API origin. The current CORS middleware allows only the two local Vite origins; production needs an explicit production-origin configuration. Do not deploy with the development secret fallback.
+### Deploy the frontend to Vercel and the API to Render
+
+The repository includes `frontend/vercel.json` for the Vite build and `render.yaml` for the Django service. Push the branch you want to deploy to GitHub first, then:
+
+1. In Vercel, choose **Add New → Project**, import this GitHub repository, and set **Root Directory** to `frontend`. Use the Vite preset, build command `npm run build`, and output directory `dist`. Deploy once to receive your public Vercel URL. The first deployment can finish before the API exists.
+2. In Render, choose **New → Blueprint**, connect the same repository, and apply the `render.yaml` blueprint. It builds from `backend` and starts Django with Gunicorn. When prompted for the Blueprint's unsynced values, enter your OpenAI key and model if you want live diagnosis, and set `CORS_ALLOWED_ORIGINS` to the exact Vercel origin, such as `https://your-project.vercel.app` (no trailing slash). Render generates `DJANGO_SECRET_KEY`; `DJANGO_DEBUG` is false.
+3. When Render finishes, copy the service's `https://...onrender.com` origin. In Vercel **Settings → Environment Variables**, set `VITE_API_BASE_URL` to that origin (no trailing slash) for Production. Redeploy the frontend so the API URL is included in its build.
+4. Open `https://<your-render-service>.onrender.com/api/health/`. Confirm it returns `ok: true` and the expected `ai_configured` value. Then open the Vercel URL and try **Fix & Prove** with a built-in fixture.
+
+For later changes, push to the connected branch; both hosts can deploy from GitHub. If you change the Vercel domain, update Render's `CORS_ALLOWED_ORIGINS` to that exact origin and redeploy the backend. Add any Vercel preview origin separately if you need preview deployments; do not use a wildcard.
+
+`OPENAI_API_KEY` and `OPENAI_MODEL` belong only in Render's environment settings. `VITE_API_BASE_URL` is public frontend configuration, not a secret. Never put the OpenAI key in a `VITE_` variable or commit a `.env` file. Django reads `ALLOWED_HOSTS` from its environment and includes Render's `RENDER_EXTERNAL_HOSTNAME`; local defaults remain available for development.
+
+The hosted project scan/fix endpoints operate on paths inside the Render service's filesystem, not folders on your computer. Use the built-in fixtures for the hosted demo. Render's local filesystem and the in-memory project run registry are not durable across restarts or deploys; `recorded_demo.json` may be reset, and project apply is intended for a single live service instance. This app has no database, so don't treat these as persistent storage.
 
 ## About
 

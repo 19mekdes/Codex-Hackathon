@@ -38,3 +38,14 @@ python manage.py runserver
 When `simulated` is `true`, the API used the fixture's checked-in `fixed.py`
 because no key was configured or the AI request failed. With a working AI
 request, `simulated` is `false`.
+
+## Deploying
+
+The repository root contains a `render.yaml` Blueprint for Render. It builds
+from this `backend/` directory and starts `config.wsgi:application` with
+Gunicorn. Set `OPENAI_API_KEY` and `OPENAI_MODEL` in Render's environment
+settings, and set `CORS_ALLOWED_ORIGINS` to the exact deployed frontend origin.
+Render generates `DJANGO_SECRET_KEY` for the service. Set the frontend's
+`VITE_API_BASE_URL` in Vercel to the Render service origin, then redeploy the
+frontend. Follow the root README's deployment steps for the Vercel project
+configuration and details about hosted project paths and non-persistent files.

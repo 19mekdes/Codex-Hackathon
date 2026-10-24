@@ -1,7 +1,14 @@
+import os
+
 from django.http import HttpResponse
 
 
 ALLOWED_ORIGINS = {"http://localhost:5173", "http://127.0.0.1:5173"}
+ALLOWED_ORIGINS.update(
+    origin.strip().rstrip("/")
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+)
 
 
 class LocalFrontendCorsMiddleware:
