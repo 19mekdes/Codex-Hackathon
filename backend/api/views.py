@@ -196,7 +196,8 @@ def fix_view(request):
     except Exception:
         return JsonResponse({"error": "Diagnosis service request failed."}, status=502)
 
-    fixed_code = diagnosis.get("fixed_code") if isinstance(diagnosis, dict) else None
+    fixed_code = diagnosis.get("fixed_code") if isinstance(
+        diagnosis, dict) else None
     if not isinstance(fixed_code, str):
         return JsonResponse({"error": "Diagnosis did not include valid fixed_code."}, status=502)
 
@@ -213,13 +214,15 @@ def fix_view(request):
             return JsonResponse({"error": str(exc)}, status=400)
         except Exception:
             return JsonResponse({"error": "Diagnosis retry failed."}, status=502)
-        fixed_code = diagnosis.get("fixed_code") if isinstance(diagnosis, dict) else None
+        fixed_code = diagnosis.get("fixed_code") if isinstance(
+            diagnosis, dict) else None
         if not isinstance(fixed_code, str):
             return JsonResponse({"error": "Diagnosis did not include valid fixed_code."}, status=502)
         result = verify(fixture_id, fixed_code)
         result["before"] = before
         if result["after"]["status"] == "failed":
-            result["report"].append({"name": "Could not verify this fix", "status": "failed"})
+            result["report"].append(
+                {"name": "Could not verify this fix", "status": "failed"})
 
     response = {
         "diagnosis": diagnosis,
@@ -239,7 +242,8 @@ def fix_view(request):
     )
     if fully_passed:
         try:
-            RECORDED_PATH.write_text(json.dumps(response, indent=2), encoding="utf-8")
+            RECORDED_PATH.write_text(json.dumps(
+                response, indent=2), encoding="utf-8")
         except OSError:
             return JsonResponse({"error": "Could not save the verified result."}, status=500)
     return JsonResponse(response)
@@ -293,9 +297,11 @@ def _traceback_project_sources(project_copy, output):
     )
     for candidate in candidates:
         try:
-            candidate_path = candidate if candidate.is_absolute() else project_copy / candidate
+            candidate_path = candidate if candidate.is_absolute() else project_copy / \
+                candidate
             traceback_path = candidate_path.resolve(strict=True)
-            relative = traceback_path.relative_to(project_copy.resolve()).as_posix()
+            relative = traceback_path.relative_to(
+                project_copy.resolve()).as_posix()
         except (OSError, ValueError, RuntimeError):
             continue
         relative_path = PurePosixPath(relative)
@@ -331,26 +337,32 @@ def _validated_project_changes(changes, source_files, project_copy):
         filename = change.get("file")
         new_content = change.get("new_content")
         if not isinstance(filename, str) or not isinstance(new_content, str):
-            raise ValueError("Each diagnosis change needs a file and string new_content.")
+            raise ValueError(
+                "Each diagnosis change needs a file and string new_content.")
         normalized = filename.replace("\\", "/")
         relative = PurePosixPath(normalized)
         if relative.is_absolute() or ".." in relative.parts or not relative.parts:
             raise ValueError("Diagnosis returned a path outside the project.")
         relative_name = relative.as_posix()
         if relative.name == ".env" or is_test_file(relative):
-            raise ValueError("Diagnosis is not allowed to change test files or .env.")
+            raise ValueError(
+                "Diagnosis is not allowed to change test files or .env.")
         if relative_name not in allowed:
-            raise ValueError("Diagnosis may only change files included from the traceback.")
+            raise ValueError(
+                "Diagnosis may only change files included from the traceback.")
         target = project_copy.joinpath(*relative.parts)
         try:
             resolved_target = target.resolve(strict=True)
             resolved_target.relative_to(project_copy.resolve(strict=True))
         except (OSError, ValueError, RuntimeError) as exc:
-            raise ValueError("Diagnosis returned a path outside the project.") from exc
+            raise ValueError(
+                "Diagnosis returned a path outside the project.") from exc
         if not resolved_target.is_file() or resolved_target.is_symlink():
-            raise ValueError("Diagnosis changes must target an existing regular project file.")
+            raise ValueError(
+                "Diagnosis changes must target an existing regular project file.")
         if relative_name in validated:
-            raise ValueError("Diagnosis returned duplicate changes for one file.")
+            raise ValueError(
+                "Diagnosis returned duplicate changes for one file.")
         total_bytes += len(new_content.encode("utf-8"))
         if total_bytes > PROJECT_MAX_CONTEXT_BYTES:
             raise ValueError("Diagnosis changes exceed the 200 KB limit.")
@@ -366,8 +378,10 @@ def _apply_to_copy(project_copy, changes):
 def _project_diff(project, project_copy, paths):
     diffs = []
     for relative in sorted(paths):
-        original = (project / Path(relative)).read_text(encoding="utf-8").splitlines(keepends=True)
-        fixed = (project_copy / Path(relative)).read_text(encoding="utf-8").splitlines(keepends=True)
+        original = (project / Path(relative)
+                    ).read_text(encoding="utf-8").splitlines(keepends=True)
+        fixed = (project_copy / Path(relative)
+                 ).read_text(encoding="utf-8").splitlines(keepends=True)
         diff = "".join(difflib.unified_diff(
             original,
             fixed,
@@ -430,7 +444,8 @@ def project_fix_view(request):
             temporary_copy.cleanup()
             return JsonResponse({"error": "Project tests already pass; there is no failing run to fix.", "before": before}, status=400)
 
-        original_source_files = _traceback_project_sources(project_copy, before["output"])
+        original_source_files = _traceback_project_sources(
+            project_copy, before["output"])
         original_contents = {
             relative: (project / Path(relative)).read_bytes()
             for relative in original_source_files
@@ -457,7 +472,8 @@ def project_fix_view(request):
         after = _run_project_copy(project_copy)
 
         if after["status"] == "failed":
-            retry_sources = _traceback_project_sources(project_copy, after["output"])
+            retry_sources = _traceback_project_sources(
+                project_copy, after["output"])
             retry_code = json.dumps(retry_sources)
             retry_error = f"Retry the repair using this new failing test output:\n{after['output']}"
             try:
@@ -480,12 +496,16 @@ def project_fix_view(request):
             and before["test_files_hash"] == baseline_hash
         )
         report = [
-            {"name": "Baseline tests fail", "status": "passed" if before["status"] == "failed" else "failed"},
-            {"name": "Test files unchanged", "status": "passed" if test_files_unchanged else "failed"},
-            {"name": "Fixed tests pass", "status": "passed" if after["status"] == "passed" else ("not_run" if after["status"] == "not_run" else "failed")},
+            {"name": "Baseline tests fail",
+                "status": "passed" if before["status"] == "failed" else "failed"},
+            {"name": "Test files unchanged",
+                "status": "passed" if test_files_unchanged else "failed"},
+            {"name": "Fixed tests pass", "status": "passed" if after["status"] == "passed" else (
+                "not_run" if after["status"] == "not_run" else "failed")},
         ]
         if after["status"] == "failed":
-            report.append({"name": "Could not verify this fix", "status": "failed"})
+            report.append(
+                {"name": "Could not verify this fix", "status": "failed"})
 
         run_id = str(uuid.uuid4())
         diffs = _project_diff(project, project_copy, cumulative_changes)

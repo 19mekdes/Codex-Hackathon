@@ -1,5 +1,4 @@
 Django==5.2.10
-# OpenAI is not installed in the active Python, so no installed version is available to pin.
-openai
+
 python-dotenv==1.0.0
 gunicorn

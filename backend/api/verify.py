@@ -21,12 +21,14 @@ def resolve_project_path(project_path):
     if not allowed_root_value:
         raise ValueError("ALLOWED_PROJECT_ROOT is not configured.")
     try:
-        allowed_root = Path(allowed_root_value).expanduser().resolve(strict=True)
+        allowed_root = Path(
+            allowed_root_value).expanduser().resolve(strict=True)
         project = Path(project_path).expanduser().resolve(strict=True)
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         raise ValueError("Project path is invalid or does not exist.") from exc
     if not allowed_root.is_dir() or not project.is_dir():
-        raise ValueError("Project path and ALLOWED_PROJECT_ROOT must be folders.")
+        raise ValueError(
+            "Project path and ALLOWED_PROJECT_ROOT must be folders.")
     if project == allowed_root or not project.is_relative_to(allowed_root):
         raise ValueError("Project path must be inside ALLOWED_PROJECT_ROOT.")
 
@@ -39,9 +41,11 @@ def resolve_project_path(project_path):
                 try:
                     target = item.resolve(strict=True)
                 except (OSError, RuntimeError) as exc:
-                    raise ValueError("Project contains a broken or looping symlink.") from exc
+                    raise ValueError(
+                        "Project contains a broken or looping symlink.") from exc
                 if target != allowed_root and not target.is_relative_to(allowed_root):
-                    raise ValueError("Project contains a symlink that escapes ALLOWED_PROJECT_ROOT.")
+                    raise ValueError(
+                        "Project contains a symlink that escapes ALLOWED_PROJECT_ROOT.")
     return project
 
 
@@ -84,7 +88,8 @@ def project_test_files_hash(project_path):
 def _project_test_files_hash(project_path):
     project = Path(project_path).resolve(strict=True)
     digest = hashlib.sha256()
-    test_files = [path for path in _eligible_project_files(project) if is_test_file(path)]
+    test_files = [path for path in _eligible_project_files(
+        project) if is_test_file(path)]
     for relative in sorted(test_files, key=lambda item: item.as_posix()):
         digest.update(relative.as_posix().encode("utf-8"))
         digest.update(b"\0")
@@ -95,7 +100,8 @@ def _project_test_files_hash(project_path):
 
 def project_test_command(project_path):
     project = Path(project_path).resolve(strict=True)
-    has_tests = any(is_test_file(path) for path in _eligible_project_files(project))
+    has_tests = any(is_test_file(path)
+                    for path in _eligible_project_files(project))
     if has_tests and importlib.util.find_spec("pytest") is not None:
         return [sys.executable, "-m", "pytest", "-x", "-q"]
     return [sys.executable, "-m", "unittest", "discover"]
@@ -138,11 +144,14 @@ def _run_project_copy(project_copy):
             timeout=30,
             check=False,
         )
-        output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+        output = "\n".join(part for part in (
+            result.stdout, result.stderr) if part).strip()
         if command[1:3] == ["-m", "pytest"]:
             passed_match = re.search(r"\b(\d+)\s+passed\b", output)
-            tests_ran = re.search(r"\b\d+\s+(?:passed|failed|errors?|skipped|xfailed|xpassed)\b", output)
-            tests_passed = bool(passed_match and int(passed_match.group(1)) > 0)
+            tests_ran = re.search(
+                r"\b\d+\s+(?:passed|failed|errors?|skipped|xfailed|xpassed)\b", output)
+            tests_passed = bool(passed_match and int(
+                passed_match.group(1)) > 0)
         else:
             count = re.search(r"Ran\s+(\d+)\s+tests?\b", output)
             tests_ran = count if count and int(count.group(1)) > 0 else None
@@ -208,7 +217,8 @@ def _fixture_test_file_hashes(fixture_dir):
     for path in sorted(fixture_dir.rglob("*.py")):
         relative = path.relative_to(fixture_dir)
         if is_test_file(relative):
-            hashes[relative.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+            hashes[relative.as_posix()] = hashlib.sha256(
+                path.read_bytes()).hexdigest()
     return hashes
 
 
@@ -289,7 +299,8 @@ def run_tests(fixture_id, code=None):
                     "test_files_hash": fixture_test_fingerprint(test_hashes_after),
                 }
 
-            output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+            output = "\n".join(part for part in (
+                result.stdout, result.stderr) if part).strip()
             test_hashes_after = _fixture_test_file_hashes(target)
             return {
                 "status": "passed" if result.returncode == 0 else "failed",
