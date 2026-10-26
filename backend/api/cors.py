@@ -17,7 +17,8 @@ class LocalFrontendCorsMiddleware:
 
     def __call__(self, request):
         origin = request.headers.get("Origin")
-        response = HttpResponse(status=204) if request.method == "OPTIONS" else self.get_response(request)
+        response = HttpResponse(
+            status=204) if request.method == "OPTIONS" else self.get_response(request)
         if origin in ALLOWED_ORIGINS:
             response["Access-Control-Allow-Origin"] = origin
             response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"

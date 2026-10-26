@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from django.test import Client, SimpleTestCase
+from django.test import Client, SimpleTestCase # type: ignore
 
 from .verify import FIXTURE_IDS, verify
 from .views import PROJECT_RUNS
@@ -38,9 +38,11 @@ class ApiEndpointTests(SimpleTestCase):
                 self.assertEqual(result["after"]["status"], "passed")
                 self.assertTrue(result["simulated"])
                 self.assertTrue(result["diagnosis"]["simulated"])
-                checks = {check["name"]: check["status"] for check in result["report"]}
+                checks = {check["name"]: check["status"]
+                          for check in result["report"]}
                 self.assertEqual(checks["tests_unchanged"], "passed")
-                self.assertEqual(checks["fix_applied_only_to_buggy_code"], "passed")
+                self.assertEqual(
+                    checks["fix_applied_only_to_buggy_code"], "passed")
                 self.assertEqual(len(result["test_fingerprint"]["before"]), 8)
                 self.assertEqual(len(result["test_fingerprint"]["after"]), 8)
 
@@ -113,8 +115,10 @@ class ApiEndpointTests(SimpleTestCase):
         self.assertEqual(result["verification"]["status"], "not_run")
         self.assertEqual(result["root_cause"], "The denominator is zero.")
         self.assertNotIn("test-secret", response.content.decode())
-        self.openai_constructor.assert_called_once_with(api_key="test-secret", timeout=30.0)
-        self.assertEqual(self.openai_client.chat.completions.create.call_args.kwargs["model"], "test-model")
+        self.openai_constructor.assert_called_once_with(
+            api_key="test-secret", timeout=30.0)
+        self.assertEqual(
+            self.openai_client.chat.completions.create.call_args.kwargs["model"], "test-model")
 
     def test_analyze_rejects_missing_or_empty_inputs(self):
         cases = [
@@ -129,9 +133,11 @@ class ApiEndpointTests(SimpleTestCase):
                 self.assertIn("error", response.json())
 
     def test_analyze_rejects_unsupported_language_and_oversized_code(self):
-        unsupported = self._analysis_request({"language": "javascript", "code": "x", "error_message": "error"})
+        unsupported = self._analysis_request(
+            {"language": "javascript", "code": "x", "error_message": "error"})
         self.assertEqual(unsupported.status_code, 400)
-        oversized = self._analysis_request({"language": "python", "code": "x" * (100 * 1024 + 1), "error_message": "error"})
+        oversized = self._analysis_request(
+            {"language": "python", "code": "x" * (100 * 1024 + 1), "error_message": "error"})
         self.assertEqual(oversized.status_code, 413)
 
     def test_analyze_missing_key_returns_configuration_error(self):
@@ -145,11 +151,13 @@ class ApiEndpointTests(SimpleTestCase):
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-secret", "OPENAI_MODEL": "test-model"}):
             response = self._analysis_request()
         self.assertEqual(response.status_code, 502)
-        self.assertEqual(response.json()["error"], "AI returned malformed analysis JSON.")
+        self.assertEqual(response.json()["error"],
+                         "AI returned malformed analysis JSON.")
 
     def test_analyze_provider_error_is_safe(self):
         client = Mock()
-        client.chat.completions.create.side_effect = ValueError("provider secret diagnostic")
+        client.chat.completions.create.side_effect = ValueError(
+            "provider secret diagnostic")
         sdk = SimpleNamespace(OpenAI=Mock(return_value=client))
         module_patch = patch.dict(sys.modules, {"openai": sdk})
         module_patch.start()
@@ -167,14 +175,17 @@ class ApiEndpointTests(SimpleTestCase):
             HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
         )
         self.assertEqual(response.status_code, 204)
-        self.assertEqual(response["Access-Control-Allow-Origin"], "http://localhost:5173")
-        denied = self.client.options("/api/health/", HTTP_ORIGIN="https://example.com")
+        self.assertEqual(
+            response["Access-Control-Allow-Origin"], "http://localhost:5173")
+        denied = self.client.options(
+            "/api/health/", HTTP_ORIGIN="https://example.com")
         self.assertNotIn("Access-Control-Allow-Origin", denied)
 
 
 class ProjectModeTests(SimpleTestCase):
     def setUp(self):
-        self.allowed_temp = tempfile.TemporaryDirectory(prefix="allowed-projects-")
+        self.allowed_temp = tempfile.TemporaryDirectory(
+            prefix="allowed-projects-")
         self.allowed_root = Path(self.allowed_temp.name)
         self.project = self.allowed_root / "tiny-project"
         self.project.mkdir()
@@ -215,7 +226,8 @@ class ProjectModeTests(SimpleTestCase):
         self.assertEqual(result["after"]["status"], "passed", result)
         self.assertTrue(result["diagnosis"]["simulated"])
         self.assertTrue(result["test_files_unchanged"])
-        self.assertTrue(all(check["status"] == "passed" for check in result["report"]))
+        self.assertTrue(
+            all(check["status"] == "passed" for check in result["report"]))
 
     def test_project_outside_allowed_root_is_rejected(self):
         with tempfile.TemporaryDirectory(prefix="outside-project-") as outside:
@@ -242,4 +254,5 @@ class ProjectModeTests(SimpleTestCase):
             )
         self.assertEqual(response.status_code, 400)
         self.assertIn("test files", response.json()["error"])
-        self.assertIn("self.assertIsNone", (self.project / "test_value.py").read_text(encoding="utf-8"))
+        self.assertIn("self.assertIsNone", (self.project /
+                      "test_value.py").read_text(encoding="utf-8"))
